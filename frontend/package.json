@@ -1,7 +1,7 @@
 {
   "name": "frontend-pawnee-react",
   "version": "1.0.0",
-  "description": "Frontend basico en React + TypeScript para el Departamento de Pawnee (sin framework de estilos)",
+  "description": "Archivo municipal de Pawnee: React + TypeScript para criaturas y avistamientos",
   "type": "module",
   "scripts": {
     "dev": "vite",

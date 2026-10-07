@@ -1,19 +1,15 @@
-/**
- * paginas/DetalleCriatura.tsx
- * -------------------------------
- * Muestra una criatura completa y la lista de sus avistamientos, usando
- * la ruta anidada del backend. También permite eliminar la criatura.
- */
-
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { eliminarCriatura, obtenerCriaturaPorId } from "../api/criaturasApi";
 import { obtenerAvistamientosDeCriatura } from "../api/avistamientosApi";
+import { AvisoError, EsqueletoExpediente } from "../componentes/Estados";
+import { Icono } from "../componentes/Iconos";
+import { MedidorPeligro } from "../componentes/MedidorPeligro";
+import { ModalConfirmacion } from "../componentes/ModalConfirmacion";
 import { Criatura } from "../tipos";
+import { codigoExpediente, ETIQUETA_ESTADO, ETIQUETA_TIPO, etiquetaPeligro, formatearFecha } from "../util/etiquetas";
+import { useTitulo } from "../util/useTitulo";
 
-// El backend anida los avistamientos bajo /criaturas/:id/avistamientos
-// SIN populate (ver criaturas.controller.ts de la Semana 6) — por eso aquí
-// el campo `criatura` es un string, no un objeto.
 interface AvistamientoSinPopular {
   _id: string;
   testigo: string;
@@ -30,76 +26,168 @@ export function DetalleCriatura() {
   const [avistamientos, setAvistamientos] = useState<AvistamientoSinPopular[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+  const [confirmar, setConfirmar] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
+
+  useTitulo(criatura?.nombre ?? "Expediente");
 
   useEffect(() => {
     if (!id) return;
 
+    setCargando(true);
+    setError(null);
     Promise.all([obtenerCriaturaPorId(id), obtenerAvistamientosDeCriatura(id)])
       .then(([criaturaCargada, avistamientosCargados]) => {
         setCriatura(criaturaCargada);
         setAvistamientos(avistamientosCargados as unknown as AvistamientoSinPopular[]);
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error al cargar la criatura."))
+      .catch((err: unknown) => {
+        setCriatura(null);
+        setError(err instanceof Error ? err.message : "Error al cargar la criatura.");
+      })
       .finally(() => setCargando(false));
-  }, [id]);
+  }, [id, intento]);
 
   async function manejarEliminar() {
     if (!id) return;
-    if (!window.confirm("¿Seguro que quieres eliminar esta criatura?")) return;
-
+    setEliminando(true);
+    setErrorModal(null);
     try {
       await eliminarCriatura(id);
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo eliminar la criatura.");
+      setErrorModal(err instanceof Error ? err.message : "No se pudo eliminar la criatura.");
+      setEliminando(false);
     }
   }
 
-  if (cargando) return <p>Cargando...</p>;
-  if (error) return <p>Error: {error}</p>;
-  if (!criatura) return <p>No se encontró la criatura.</p>;
+  const notas = [...avistamientos].sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha));
 
   return (
-    <div>
-      <p>
-        <Link to="/">Volver a la lista</Link>
-      </p>
+    <section className="pagina">
+      <Link className="volver" to="/">
+        ← Archivo de criaturas
+      </Link>
 
-      <h1>{criatura.nombre}</h1>
+      {cargando && <EsqueletoExpediente />}
+      {!cargando && error && <AvisoError mensaje={error} onReintentar={() => setIntento((valor) => valor + 1)} />}
+      {!cargando && !error && criatura && (
+        <>
+          <header className="expediente-cabecera">
+            <div>
+              <p className="sobrelinea">Expediente {codigoExpediente(criatura._id)}</p>
+              <h1>{criatura.nombre}</h1>
+              <div className="fila-insignias">
+                <span className="insignia" data-tipo={criatura.tipo}>
+                  <Icono nombre={criatura.tipo} className="insignia-icono" />
+                  {ETIQUETA_TIPO[criatura.tipo]}
+                </span>
+                <span className="estado" data-estado={criatura.estado}>
+                  {ETIQUETA_ESTADO[criatura.estado]}
+                </span>
+              </div>
+            </div>
+            <div className="acciones">
+              <Link className="boton boton-primario" to={`/criaturas/${criatura._id}/editar`}>
+                Editar expediente
+              </Link>
+              <button
+                type="button"
+                className="boton boton-peligro"
+                onClick={() => {
+                  setErrorModal(null);
+                  setConfirmar(true);
+                }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </header>
 
-      <ul>
-        <li>Tipo: {criatura.tipo}</li>
-        <li>Nivel de peligro: {criatura.nivelPeligro}</li>
-        <li>Estado: {criatura.estado}</li>
-        <li>Habilidades: {criatura.habilidades.join(", ") || "(ninguna registrada)"}</li>
-      </ul>
+          <div className="paneles">
+            <article className="panel">
+              <h2>Nivel de peligro</h2>
+              <p className="panel-frase">{etiquetaPeligro(criatura.nivelPeligro)}</p>
+              <MedidorPeligro valor={criatura.nivelPeligro} />
+            </article>
 
-      <p>
-        <Link to={`/criaturas/${criatura._id}/editar`}>Editar</Link>
-        {" | "}
-        <button type="button" onClick={manejarEliminar}>
-          Eliminar
-        </button>
-      </p>
+            <article className="panel">
+              <h2>Habilidades</h2>
+              {criatura.habilidades.length > 0 ? (
+                <ul className="chips">
+                  {criatura.habilidades.map((habilidad) => (
+                    <li className="chip" key={habilidad}>
+                      {habilidad}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="ayuda">Ninguna habilidad anotada todavía.</p>
+              )}
+            </article>
 
-      <h2>Avistamientos registrados</h2>
+            <article className="panel">
+              <h2>Bitácora</h2>
+              <dl>
+                <div className="dato">
+                  <dt>Abierta</dt>
+                  <dd>{formatearFecha(criatura.createdAt)}</dd>
+                </div>
+                <div className="dato">
+                  <dt>Actualizada</dt>
+                  <dd>{formatearFecha(criatura.updatedAt)}</dd>
+                </div>
+                <div className="dato">
+                  <dt>Avistamientos</dt>
+                  <dd>{notas.length}</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
 
-      <p>
-        <Link to={`/avistamientos/nuevo?criaturaId=${criatura._id}`}>Registrar un avistamiento de esta criatura</Link>
-      </p>
+          <div className="seccion-cabeza">
+            <h2>Avistamientos</h2>
+            <Link className="boton boton-secundario" to={`/avistamientos/nuevo?criaturaId=${criatura._id}`}>
+              Registrar avistamiento
+            </Link>
+          </div>
 
-      {avistamientos.length === 0 ? (
-        <p>Todavía no hay avistamientos registrados para esta criatura.</p>
-      ) : (
-        <ul>
-          {avistamientos.map((avistamiento) => (
-            <li key={avistamiento._id}>
-              {avistamiento.fecha.slice(0, 10)} — {avistamiento.testigo} en {avistamiento.ubicacion}
-              {avistamiento.descripcion ? ` (${avistamiento.descripcion})` : ""}
-            </li>
-          ))}
-        </ul>
+          {notas.length === 0 ? (
+            <p className="ayuda ayuda-bloque">Todavía no hay notas de campo para esta criatura.</p>
+          ) : (
+            <ol className="linea-tiempo">
+              {notas.map((avistamiento) => (
+                <li className="hito" key={avistamiento._id}>
+                  <span className="hito-punto" aria-hidden="true" />
+                  <article className="hito-cuerpo">
+                    <p className="hito-fecha">{formatearFecha(avistamiento.fecha)}</p>
+                    <p className="nota-linea">
+                      <strong>{avistamiento.testigo}</strong>
+                      <span> en {avistamiento.ubicacion}</span>
+                    </p>
+                    {avistamiento.descripcion && <p className="cita">{avistamiento.descripcion}</p>}
+                  </article>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
       )}
-    </div>
+
+      <ModalConfirmacion
+        abierto={confirmar}
+        titulo={`¿Eliminar a ${criatura?.nombre ?? "esta criatura"}?`}
+        mensaje="El expediente sale del archivo. Esta acción no se puede deshacer."
+        confirmar="Eliminar expediente"
+        confirmando={eliminando}
+        error={errorModal}
+        onCerrar={() => {
+          if (!eliminando) setConfirmar(false);
+        }}
+        onConfirmar={manejarEliminar}
+      />
+    </section>
   );
 }

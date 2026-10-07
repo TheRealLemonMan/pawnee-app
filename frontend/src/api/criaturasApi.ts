@@ -12,7 +12,13 @@ const BASE = `${API_URL}/api/criaturas`;
 async function manejarRespuesta<T>(respuesta: Response): Promise<T> {
   if (!respuesta.ok) {
     const cuerpo = await respuesta.json().catch(() => ({}));
-    throw new Error(cuerpo.error ?? `Error HTTP ${respuesta.status}`);
+    if (typeof cuerpo.error === "string" && cuerpo.error.trim()) {
+      throw new Error(cuerpo.error);
+    }
+    if (respuesta.status >= 500) {
+      throw new Error("El archivo no está disponible. Comprueba que la API esté en marcha.");
+    }
+    throw new Error(`Error HTTP ${respuesta.status}`);
   }
   if (respuesta.status === 204) {
     return undefined as T;

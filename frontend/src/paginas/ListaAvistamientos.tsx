@@ -1,87 +1,145 @@
-/**
- * paginas/ListaAvistamientos.tsx
- * -----------------------------------
- * Lista TODOS los avistamientos. Como el backend usa populate("criatura"),
- * cada avistamiento.criatura ya es el objeto completo.
- */
-
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { eliminarAvistamiento, obtenerAvistamientos } from "../api/avistamientosApi";
-import { Avistamiento } from "../tipos";
+import { AvisoError, Cargando, Vacio } from "../componentes/Estados";
+import { ModalConfirmacion } from "../componentes/ModalConfirmacion";
+import { Avistamiento, Criatura } from "../tipos";
+import { ETIQUETA_TIPO, formatearFecha } from "../util/etiquetas";
+import { useTitulo } from "../util/useTitulo";
+
+function criaturaDe(avistamiento: Avistamiento): Criatura | null {
+  const criatura = avistamiento.criatura;
+  if (criatura && typeof criatura === "object" && "_id" in criatura) return criatura;
+  return null;
+}
 
 export function ListaAvistamientos() {
   const [avistamientos, setAvistamientos] = useState<Avistamiento[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [intento, setIntento] = useState(0);
+  const [pendiente, setPendiente] = useState<Avistamiento | null>(null);
+  const [eliminando, setEliminando] = useState(false);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
 
-  function cargar() {
+  useTitulo("Avistamientos");
+
+  useEffect(() => {
     setCargando(true);
     setError(null);
     obtenerAvistamientos()
       .then(setAvistamientos)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Error al cargar los avistamientos."))
+      .catch((err: unknown) => {
+        setAvistamientos([]);
+        setError(err instanceof Error ? err.message : "Error al cargar los avistamientos.");
+      })
       .finally(() => setCargando(false));
-  }
+  }, [intento]);
 
-  useEffect(() => {
-    cargar();
-  }, []);
+  const ordenados = useMemo(
+    () => [...avistamientos].sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha)),
+    [avistamientos]
+  );
 
-  async function manejarEliminar(id: string) {
-    if (!window.confirm("¿Eliminar este avistamiento?")) return;
+  async function confirmarEliminar() {
+    if (!pendiente) return;
+    setEliminando(true);
+    setErrorModal(null);
     try {
-      await eliminarAvistamiento(id);
-      cargar();
+      await eliminarAvistamiento(pendiente._id);
+      setAvistamientos((lista) => lista.filter((avistamiento) => avistamiento._id !== pendiente._id));
+      setPendiente(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo eliminar el avistamiento.");
+      setErrorModal(err instanceof Error ? err.message : "No se pudo eliminar el avistamiento.");
+    } finally {
+      setEliminando(false);
     }
   }
 
   return (
-    <div>
-      <h1>Avistamientos registrados</h1>
+    <section className="pagina">
+      <header className="encabezado">
+        <div>
+          <p className="sobrelinea">Bitácora de campo</p>
+          <h1>Avistamientos</h1>
+          <p className="lede">Quién vio qué, y en qué rincón de Pawnee decidió contarlo.</p>
+        </div>
+        <Link className="boton boton-primario" to="/avistamientos/nuevo">
+          Registrar avistamiento
+        </Link>
+      </header>
 
-      <p>
-        <Link to="/">Volver a criaturas</Link>
-        {" · "}
-        <Link to="/avistamientos/nuevo">Registrar avistamiento nuevo</Link>
-      </p>
-
-      {cargando && <p>Cargando avistamientos...</p>}
-      {!cargando && error && <p>Error: {error}</p>}
-      {!cargando && !error && avistamientos.length === 0 && <p>Todavía no hay avistamientos registrados.</p>}
-
-      {!cargando && !error && avistamientos.length > 0 && (
-        <table border={1} cellPadding={6}>
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Criatura</th>
-              <th>Testigo</th>
-              <th>Ubicación</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {avistamientos.map((avistamiento) => (
-              <tr key={avistamiento._id}>
-                <td>{avistamiento.fecha.slice(0, 10)}</td>
-                <td>
-                  <Link to={`/criaturas/${avistamiento.criatura._id}`}>{avistamiento.criatura.nombre}</Link>
-                </td>
-                <td>{avistamiento.testigo}</td>
-                <td>{avistamiento.ubicacion}</td>
-                <td>
-                  <button type="button" onClick={() => manejarEliminar(avistamiento._id)}>
-                    Eliminar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {cargando && <Cargando etiqueta="Revisando la bitácora…" />}
+      {!cargando && error && <AvisoError mensaje={error} onReintentar={() => setIntento((valor) => valor + 1)} />}
+      {!cargando && !error && ordenados.length === 0 && (
+        <Vacio
+          titulo="Todavía no hay notas de campo"
+          texto="Cuando alguien vea algo que no debería estar en el césped, el registro empieza aquí."
+          accion={
+            <Link className="boton boton-primario" to="/avistamientos/nuevo">
+              Anotar el primero
+            </Link>
+          }
+        />
       )}
-    </div>
+
+      {!cargando && !error && ordenados.length > 0 && (
+        <ol className="linea-tiempo">
+          {ordenados.map((avistamiento) => {
+            const criatura = criaturaDe(avistamiento);
+            return (
+              <li className="hito" key={avistamiento._id}>
+                <span className="hito-punto" aria-hidden="true" />
+                <article className="hito-cuerpo">
+                  <div className="hito-cabeza">
+                    <p className="hito-fecha">{formatearFecha(avistamiento.fecha)}</p>
+                    <button
+                      type="button"
+                      className="boton-texto boton-texto-peligro"
+                      onClick={() => {
+                        setErrorModal(null);
+                        setPendiente(avistamiento);
+                      }}
+                    >
+                      Retirar
+                    </button>
+                  </div>
+                  <h2>
+                    {criatura ? (
+                      <Link to={`/criaturas/${criatura._id}`}>{criatura.nombre}</Link>
+                    ) : (
+                      "Criatura sin expediente"
+                    )}
+                  </h2>
+                  {criatura && (
+                    <p className="insignia" data-tipo={criatura.tipo}>
+                      {ETIQUETA_TIPO[criatura.tipo]}
+                    </p>
+                  )}
+                  <p className="nota-linea">
+                    <strong>{avistamiento.testigo}</strong>
+                    <span> en {avistamiento.ubicacion}</span>
+                  </p>
+                  {avistamiento.descripcion && <p className="cita">{avistamiento.descripcion}</p>}
+                </article>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <ModalConfirmacion
+        abierto={Boolean(pendiente)}
+        titulo="¿Retirar este avistamiento?"
+        mensaje="La nota sale de la bitácora. La criatura se queda en el archivo."
+        confirmar="Retirar nota"
+        confirmando={eliminando}
+        error={errorModal}
+        onCerrar={() => {
+          if (!eliminando) setPendiente(null);
+        }}
+        onConfirmar={confirmarEliminar}
+      />
+    </section>
   );
 }
