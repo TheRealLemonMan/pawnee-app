@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { eliminarAvistamiento, obtenerAvistamientos } from "../api/avistamientosApi";
 import { AvisoError, Cargando, Vacio } from "../componentes/Estados";
 import { ModalConfirmacion } from "../componentes/ModalConfirmacion";
@@ -21,6 +23,7 @@ export function ListaAvistamientos() {
   const [pendiente, setPendiente] = useState<Avistamiento | null>(null);
   const [eliminando, setEliminando] = useState(false);
   const [errorModal, setErrorModal] = useState<string | null>(null);
+  const paginaRef = useRef<HTMLElement>(null);
 
   useTitulo("Avistamientos");
 
@@ -56,8 +59,25 @@ export function ListaAvistamientos() {
     }
   }
 
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || cargando || error) return;
+      const notas = gsap.utils.toArray<HTMLElement>(".hito");
+      if (!notas.length) return;
+      gsap.from(notas, {
+        x: -16,
+        autoAlpha: 0,
+        duration: 0.48,
+        stagger: 0.06,
+        ease: "power3.out",
+        clearProps: "transform,opacity,visibility",
+      });
+    },
+    { scope: paginaRef, dependencies: [cargando, error, ordenados.length] }
+  );
+
   return (
-    <section className="pagina">
+    <section className="pagina" ref={paginaRef}>
       <header className="encabezado">
         <div>
           <p className="sobrelinea">Bitácora de campo</p>

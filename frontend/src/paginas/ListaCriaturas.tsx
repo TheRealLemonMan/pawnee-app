@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { obtenerCriaturas } from "../api/criaturasApi";
 import { FichaCriatura } from "../componentes/FichaCriatura";
 import { AvisoError, EsqueletoFichas, Vacio } from "../componentes/Estados";
@@ -19,6 +21,7 @@ export function ListaCriaturas() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
+  const paginaRef = useRef<HTMLElement>(null);
 
   useTitulo("Registro de criaturas");
 
@@ -53,6 +56,65 @@ export function ListaCriaturas() {
     });
   }, [criaturas, busqueda, orden]);
 
+  const idsVisibles = visibles.map((criatura) => criatura._id).join("|");
+
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      gsap.from(".placa .sello", {
+        rotation: -18,
+        scale: 0.78,
+        duration: 0.9,
+        delay: 0.2,
+        ease: "back.out(1.6)",
+      });
+    },
+    { scope: paginaRef }
+  );
+
+  useGSAP(
+    () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || cargando || error) return;
+
+      gsap.utils.toArray<HTMLElement>(".metrica dd").forEach((cifra) => {
+        const destino = Number((cifra.textContent ?? "").trim().replace(",", "."));
+        if (!Number.isFinite(destino)) return;
+        const estado = { valor: 0 };
+        const entero = Number.isInteger(destino);
+        gsap.to(estado, {
+          valor: destino,
+          duration: 0.85,
+          ease: "power2.out",
+          onUpdate: () => {
+            cifra.textContent = entero
+              ? String(Math.round(estado.valor))
+              : estado.valor.toLocaleString("es", { maximumFractionDigits: 1 });
+          },
+        });
+      });
+
+      const fichas = gsap.utils.toArray<HTMLElement>(".ficha");
+      if (!fichas.length) return;
+      gsap.from(fichas, {
+        y: 28,
+        autoAlpha: 0,
+        duration: 0.55,
+        stagger: 0.07,
+        ease: "power3.out",
+        clearProps: "transform,opacity,visibility",
+      });
+      gsap.from(".medidor-relleno", {
+        scaleX: 0,
+        transformOrigin: "left center",
+        duration: 0.8,
+        stagger: 0.07,
+        delay: 0.1,
+        ease: "power2.out",
+      });
+    },
+    { scope: paginaRef, dependencies: [idsVisibles, cargando, error] }
+  );
+
   const primeraCarga = cargando && criaturas.length === 0 && !error;
   const sinDatos = primeraCarga || Boolean(error);
   const activas = visibles.filter((criatura) => criatura.estado === "activa").length;
@@ -64,7 +126,7 @@ export function ListaCriaturas() {
     : "—";
 
   return (
-    <section className="pagina">
+    <section className="pagina" ref={paginaRef}>
       <header className="hero">
         <div className="hero-texto">
           <p className="sobrelinea">Departamento de Parques · Pawnee</p>

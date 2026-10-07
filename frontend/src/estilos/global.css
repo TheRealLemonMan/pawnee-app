@@ -31,13 +31,11 @@ body {
   font-family: var(--sans);
   font-weight: 400;
   line-height: 1.5;
-  background-color: var(--paper);
+  background-color: #efe6d6;
   background-image:
-    radial-gradient(1100px 480px at 8% -10%, rgba(47, 107, 79, 0.18), transparent 60%),
-    radial-gradient(820px 420px at 100% 0%, rgba(198, 161, 90, 0.22), transparent 55%),
-    linear-gradient(rgba(18, 53, 44, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(18, 53, 44, 0.035) 1px, transparent 1px);
-  background-size: auto, auto, 28px 28px, 28px 28px;
+    radial-gradient(980px 560px at -6% -8%, rgba(31, 92, 66, 0.2), transparent 58%),
+    radial-gradient(760px 480px at 108% -4%, rgba(198, 161, 90, 0.26), transparent 54%),
+    radial-gradient(860px 520px at 58% 112%, rgba(18, 53, 44, 0.1), transparent 62%);
   background-attachment: fixed;
 }
 
@@ -73,6 +71,27 @@ h1, h2, p { overflow-wrap: anywhere; }
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.fondo-parque {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fondo-mapa {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+}
+
+.lienzo,
+.pie {
+  position: relative;
+  z-index: 1;
 }
 
 .saltar {
@@ -127,6 +146,8 @@ h1, h2, p { overflow-wrap: anywhere; }
   width: 42px;
   height: 42px;
   color: var(--gold-bright);
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .marca-ciudad {
@@ -486,7 +507,6 @@ h1 {
   flex-direction: column;
   gap: 0.8rem;
   min-height: 100%;
-  animation: aparecer 0.45s ease both;
 }
 
 .ficha:hover {
@@ -1068,18 +1088,6 @@ h1 {
 }
 
 .expediente-esqueleto { display: grid; gap: 0.8rem; }
-
-.hito-cuerpo, .dialogo { animation: surgir 0.4s ease both; }
-
-@keyframes aparecer {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes surgir {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
 
 @keyframes pulso {
   0%, 100% { opacity: 0.4; transform: scale(0.96); }

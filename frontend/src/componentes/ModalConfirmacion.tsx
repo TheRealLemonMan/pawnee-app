@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import gsap from "gsap";
 
 interface PropsModal {
   abierto: boolean;
@@ -24,7 +25,18 @@ export function ModalConfirmacion({
 }: PropsModal) {
   const cerrarRef = useRef(onCerrar);
   const cancelarRef = useRef<HTMLButtonElement>(null);
+  const veloRef = useRef<HTMLDivElement>(null);
   cerrarRef.current = onCerrar;
+
+  useEffect(() => {
+    if (!abierto || !veloRef.current) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const contexto = gsap.context(() => {
+      gsap.from(veloRef.current, { autoAlpha: 0, duration: 0.25 });
+      gsap.from(".dialogo", { y: 18, scale: 0.96, autoAlpha: 0, duration: 0.4, ease: "power3.out" });
+    }, veloRef);
+    return () => contexto.revert();
+  }, [abierto]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -48,6 +60,7 @@ export function ModalConfirmacion({
   return createPortal(
     <div
       className="velo"
+      ref={veloRef}
       onClick={() => {
         if (!confirmando) onCerrar();
       }}
